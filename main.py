@@ -1,24 +1,55 @@
-import Geometry
 import Microphone
 import SignalProcessing
-import GUI
+import Geometry
+import matplotlib.pyplot as plt
+import numpy as np
 
-def sample_for(freq, distance_constant):
-    def on_sample(left, right):
-        left_fft = SignalProcessing.do_FFT(left, Microphone.RATE)
-        right_fft = SignalProcessing.do_FFT(right, Microphone.RATE)
+sound_speed_in_sec = 343
+base_distance = 0.175
 
-        left_amplitude = left_fft[freq]
-        right_amplitude = right_fft[freq]
+plt.ion()
+f = Microphone.RATE * np.arange((Microphone.CHUNK / 2)) / Microphone.CHUNK
 
-        left_distance = Geometry.as_distance(left_amplitude, distance_constant)
-        right_distance = Geometry.as_distance(right_amplitude, distance_constant)
+angle = []
+toa = []
+def handler(dataL, dataR):
 
-        x = Geometry.locate_1d(left_distance, right_distance)
-        print(x)
+    #Scale signals so that they are the same amplitude
+    dataL = (dataL - np.mean(dataL))/np.std(dataL)
+    dataR = (dataR - np.mean(dataR))/np.std(dataR)
 
+    correlation = SignalProcessing.correlate(dataL, dataR)
+    time_diff = SignalProcessing.time_difference(correlation, Microphone.RATE)
+    toa.append(time_diff)
+    angle.append(Geometry.locate_1d_toa(time_diff, sound_speed_in_sec, base_distance))
 
-if __name__ == "__main__":
-    Microphone.printMicrophones()
-    Microphone.record_LR_continuous(sample_for(400, 1), lambda : False, 1, 2)
+    if len(angle) > 100:
+        angle.pop(0)
+    if len(toa) > 100:
+        toa.pop(0)
+    plt.figure("Angle")
+    plt.clf()
+    plt.plot(angle)
+    plt.draw()
+
+    plt.figure("Microphones")
+    plt.clf()
+    plt.plot(dataR)
+    plt.plot(dataL)
+
+    plt.figure("Time difference")
+    plt.clf()
+    plt.plot(toa)
+    plt.draw()
+
+    plt.figure("Correlation")
+    plt.clf()
+    plt.plot(correlation)
+    plt.draw()
+
+    plt.pause(0.005)
+
+plt.show()
+
+Microphone.record_LR_continuous(handler, lambda : False, 1, 2)
 
